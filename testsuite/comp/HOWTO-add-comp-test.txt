@@ -1,0 +1,20 @@
+How to add a new test to testsuite/comp
+---------------------------------------
+
+(1) Choose short name for test (TNAME), 
+    (e.g. `tstart' was used for test checking for a bug that causes the
+    compiler to behave differently for class whose name starts with `T')
+    make sure it does not clash with any test name in testsuite.
+
+(2) Prepare the source file `TNAME-class.mc' with metacompiler description.
+
+(3) Prepare the file `TNAME-test.cc' with the source you want to feed
+    to the generated compiler
+
+(4) Prepare the text file `TNAME-class.gold' with expeced output
+    of the compiler generated from `TNAME-class.mc' when translating
+    `TNAME-test.cc'. NOTE: Only stdout output is taken into consideration.
+
+(5) Add the 3 files to EXTRA_DIST in `../Makefile.am'
+
+(6) Change to the top dir and run `./bootstrap' to rebuild `Makefile.in'

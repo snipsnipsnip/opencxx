@@ -1,0 +1,505 @@
+#!/bin/sh
+#@beginlicenses@
+#@license{Grzegorz Jakacki}{2003-2004}@
+#
+#  Permission to use, copy, distribute and modify this software and its  
+#  documentation for any purpose is hereby granted without fee, provided that
+#  the above copyright notice appears in all copies and that both that copyright
+#  notice and this permission notice appear in supporting documentation.
+# 
+#  Grzegorz Jakacki make(s) no representations about the suitability of this
+#  software for any purpose. It is provided "as is" without express or implied
+#  warranty.
+#  
+#  Copyright (C) 2003-2004 Grzegorz Jakacki
+#
+#@endlicenses@
+
+cmdname=`echo $0 | sed 's:.*/::'`
+testname=''
+tested="@abs_top_builddir@/occ2 --dry-run --verbose --ld=LD --cxx=CXX --cpp=CPP \
+    --trans=TRANS --transplug=TRANSPLUG \
+    --valdtr=VALDTR --valdtrplug=VALDTRPLUG \
+    --libtool=LIBTOOL \
+    --occ-libs=OCC_LIBS --occ-includes=OCC_INCLUDES"
+
+
+fail() {
+    echo "$cmdname: $*" >&2
+    exit 1
+}
+
+open_test() {
+    test "x$testname" != x && fail "previous test ($testname) not closed"
+    if test "x$testlist" != x; then
+        case $testlist in
+            $1|*" $1 "*|*" $1"|"$1 "*) ;;
+            *) return 1;;
+        esac
+    fi
+    rm -rf $cmdname.dir/$1
+    mkdir -p $cmdname.dir/$1
+    after_test_go_to_dir=`pwd`
+    cd $cmdname.dir/$1 || fail "cannot cd to $cmdname.dir/$1"
+    testname=$1
+    echo "$cmdname: $testname ..."
+    return 0
+}
+
+close_test() {
+    test "x$testname" = x && fail "no open test"
+    cd $after_test_go_to_dir || fail "cannot cd to $after_test_go_to_dir"
+    rm -rf $cmdname.dir/$testname
+    echo "$cmdname: $testname PASS"
+    testname=''
+}
+
+fail_test() {
+    if test "x$*" = x; then
+        echo "$cmdname: $testname FAIL"
+    else
+        echo "$cmdname: $testname FAIL ($*)"
+    fi
+    exit 2
+}
+
+# strip_decoration FILE
+#
+strip_decoration() {
+    { sed "s/^occ2: [^ ][^ ]*: //" <$1 >$1.tmp; }  &&  mv $1.tmp $1
+}
+
+test "x$cmdname" = x && fail "cannot figure out command name (invalid \$0 ?)"
+rm -rf "$cmdname.dir"
+
+testlist="$*"
+
+###################################################################
+open_test minus_Wt && {
+
+$tested -E -Wt,--option1,arg,--option2 foo.ii >result \
+    || fail "cannot execute"
+
+cat >golden <<__END__
+TRANS --option1 arg --option2 <foo.ii --private--output foo.occ.tmp 2>foo.feedback  
+mv foo.occ.tmp foo.occ  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test minus_Wt_and_minus_S && {
+
+$tested -S PLUGIN -E -Wt,--option1,arg,--option2 foo.ii >result \
+    || fail "cannot execute"
+
+cat >golden <<__END__
+TRANSPLUG PLUGIN --option1 arg --option2 <foo.ii --private--output foo.occ.tmp 2>foo.feedback  
+mv foo.occ.tmp foo.occ  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test minus_Wt_and_minus_p && {
+
+$tested -p -Wt,--option1,arg,--option2 foo.ii >result \
+    || fail "cannot execute"
+
+cat >golden <<__END__
+VALDTR --option1 arg --option2 <foo.ii  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test minus_Wt_and_minus_p_and_minus_S && {
+
+$tested -S PLUGIN -p -Wt,--option1,arg,--option2 foo.ii >result \
+    || fail "cannot execute"
+
+cat >golden <<__END__
+VALDTRPLUG PLUGIN --option1 arg --option2 <foo.ii  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test minus_Wl && {
+
+$tested -Wl,--option1,arg,--option2 foo.lo -o foo >result \
+    || fail "cannot execute"
+
+cat >golden <<__END__
+LIBTOOL --tag=CXX --mode=link LD --option1 arg --option2 foo.lo OCC_LIBS -o foo  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test minus_Wc && {
+
+$tested -c -Wc,--option1,arg,--option2 foo.occ >result \
+    || fail "cannot execute"
+
+cat >golden <<__END__
+cp foo.occ foo.2.ii  
+LIBTOOL --tag=CXX --mode=compile CXX --option1 arg --option2 -c foo.2.ii -o foo.lo  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test minus_Wp_and_minus_P && {
+
+$tested -c -P -Wp,--option1,arg,--option2 foo.cc >result \
+    || fail "cannot execute"
+
+cat >golden <<__END__
+CPP -x c++ -D__opencxx --option1 arg --option2 OCC_INCLUDES foo.cc -o foo.ii  
+TRANS <foo.ii --private--output foo.occ.tmp 2>foo.feedback  
+mv foo.occ.tmp foo.occ  
+CPP --option1 arg --option2 OCC_INCLUDES foo.occ -o foo.2.ii  
+LIBTOOL --tag=CXX --mode=compile CXX -c foo.2.ii -o foo.lo  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test minus_Wp1 && {
+
+$tested -P -Wp1,--option1,arg,--option2 foo.cc >result \
+    || fail "cannot execute"
+
+cat >golden <<__END__
+CPP -x c++ -D__opencxx --option1 arg --option2 OCC_INCLUDES foo.cc -o foo.ii  
+TRANS <foo.ii --private--output foo.occ.tmp 2>foo.feedback  
+mv foo.occ.tmp foo.occ  
+CPP OCC_INCLUDES foo.occ -o foo.2.ii  
+LIBTOOL --tag=CXX --mode=compile CXX -c foo.2.ii -o foo.lo  
+LIBTOOL --tag=CXX --mode=link LD foo.lo OCC_LIBS -o foo  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test minus_Wp2 && {
+
+$tested -c -P -Wp2,--option1,arg,--option2 foo.cc >result \
+    || fail "cannot execute"
+
+cat >golden <<__END__
+CPP -x c++ -D__opencxx OCC_INCLUDES foo.cc -o foo.ii  
+TRANS <foo.ii --private--output foo.occ.tmp 2>foo.feedback  
+mv foo.occ.tmp foo.occ  
+CPP --option1 arg --option2 OCC_INCLUDES foo.occ -o foo.2.ii  
+LIBTOOL --tag=CXX --mode=compile CXX -c foo.2.ii -o foo.lo  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test minus_Wp && {
+
+$tested -E -Wp,--option1,arg,--option2 foo.cc >result || fail "cannot execute"
+
+cat >golden <<__END__
+CPP -x c++ -D__opencxx --option1 arg --option2 OCC_INCLUDES foo.cc -o foo.ii  
+TRANS <foo.ii --private--output foo.occ.tmp 2>foo.feedback  
+mv foo.occ.tmp foo.occ  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test minus_L_and_minus_l && {
+
+$tested foo.lo -o foo -Lfoo1/foo2 -lation -L/bar1/bar2 -lido \
+    >result || fail_test "cannot execute"
+
+cat >golden <<__END__
+LIBTOOL --tag=CXX --mode=link LD foo.lo OCC_LIBS -Lfoo1/foo2 -lation -L/bar1/bar2 -lido -o foo  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test translation_with_plugin && {
+
+$tested -S PLUGIN -E foo.ii >result || fail_test "cannot execute"
+
+cat >golden <<__END__
+TRANSPLUG PLUGIN <foo.ii --private--output foo.occ.tmp 2>foo.feedback  
+mv foo.occ.tmp foo.occ  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test include_dirs_and_minus_P && {
+
+$tested -P -Ifoo1/foo2 -I/bar2/bar2 foo.cc >result || fail_test "cannot execute"
+
+cat >golden <<__END__
+CPP -x c++ -D__opencxx OCC_INCLUDES -Ifoo1/foo2 -I/bar2/bar2 foo.cc -o foo.ii  
+TRANS <foo.ii --private--output foo.occ.tmp 2>foo.feedback  
+mv foo.occ.tmp foo.occ
+CPP OCC_INCLUDES -Ifoo1/foo2 -I/bar2/bar2 foo.occ -o foo.2.ii  
+LIBTOOL --tag=CXX --mode=compile CXX -c foo.2.ii -o foo.lo  
+LIBTOOL --tag=CXX --mode=link LD foo.lo OCC_LIBS -o foo  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test include_dirs && {
+
+$tested -Ifoo1/foo2 -I/bar2/bar2 foo.cc >result || fail_test "cannot execute"
+
+cat >golden <<__END__
+CPP -x c++ -D__opencxx OCC_INCLUDES -Ifoo1/foo2 -I/bar2/bar2 foo.cc -o foo.ii  
+TRANS <foo.ii --private--output foo.occ.tmp 2>foo.feedback  
+mv foo.occ.tmp foo.occ
+cp foo.occ foo.2.ii  
+LIBTOOL --tag=CXX --mode=compile CXX -c foo.2.ii -o foo.lo  
+LIBTOOL --tag=CXX --mode=link LD foo.lo OCC_LIBS -o foo  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test minus_P && {
+
+$tested -P foo.cc >result || fail_test "cannot execute"
+
+cat >golden <<__END__
+CPP -x c++ -D__opencxx OCC_INCLUDES foo.cc -o foo.ii  
+TRANS <foo.ii --private--output foo.occ.tmp 2>foo.feedback  
+mv foo.occ.tmp foo.occ
+CPP OCC_INCLUDES foo.occ -o foo.2.ii  
+LIBTOOL --tag=CXX --mode=compile CXX -c foo.2.ii -o foo.lo  
+LIBTOOL --tag=CXX --mode=link LD foo.lo OCC_LIBS -o foo  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test minus_c && {
+
+$tested -c foo.cc >result || fail_test "cannot execute"
+
+cat >golden <<__END__
+CPP -x c++ -D__opencxx OCC_INCLUDES foo.cc -o foo.ii  
+TRANS <foo.ii --private--output foo.occ.tmp 2>foo.feedback  
+mv foo.occ.tmp foo.occ
+cp foo.occ foo.2.ii  
+LIBTOOL --tag=CXX --mode=compile CXX -c foo.2.ii -o foo.lo  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test minus_E && {
+
+$tested -E foo.cc >result || fail_test "cannot execute"
+
+cat >golden <<__END__
+CPP -x c++ -D__opencxx OCC_INCLUDES foo.cc -o foo.ii  
+TRANS <foo.ii --private--output foo.occ.tmp 2>foo.feedback  
+mv foo.occ.tmp foo.occ
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test minus_p && {
+
+$tested -p foo.cc >result || fail_test "cannot execute"
+
+cat >golden <<__END__
+CPP -x c++ -D__opencxx OCC_INCLUDES foo.cc -o foo.ii  
+VALDTR <foo.ii  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test minus_n_lo_extension && {
+
+$tested -n foo.lo >result || fail_test "cannot execute"
+
+cat >golden <<__END__
+LIBTOOL --tag=CXX --mode=link LD foo.lo OCC_LIBS -o foo  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test minus_n && {
+
+$tested -n foo.cc >result || fail_test "cannot execute"
+
+cat >golden <<__END__
+cp foo.cc foo.ii  
+TRANS <foo.ii --private--output foo.occ.tmp 2>foo.feedback  
+mv foo.occ.tmp foo.occ  
+cp foo.occ foo.2.ii  
+LIBTOOL --tag=CXX --mode=compile CXX -c foo.2.ii -o foo.lo  
+LIBTOOL --tag=CXX --mode=link LD foo.lo OCC_LIBS -o foo  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test standard_path_lo_extension && {
+
+$tested foo.lo >result || fail_test "cannot execute"
+
+cat >golden <<__END__
+LIBTOOL --tag=CXX --mode=link LD foo.lo OCC_LIBS -o foo  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test standard_path_occ_extension && {
+
+$tested foo.occ >result || fail_test "cannot execute"
+
+cat >golden <<__END__
+cp foo.occ foo.2.ii  
+LIBTOOL --tag=CXX --mode=compile CXX -c foo.2.ii -o foo.lo  
+LIBTOOL --tag=CXX --mode=link LD foo.lo OCC_LIBS -o foo  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test standard_path_ii_extension && {
+
+$tested foo.ii >result || fail_test "cannot execute"
+
+cat >golden <<__END__
+TRANS <foo.ii --private--output foo.occ.tmp 2>foo.feedback  
+mv foo.occ.tmp foo.occ  
+cp foo.occ foo.2.ii  
+LIBTOOL --tag=CXX --mode=compile CXX -c foo.2.ii -o foo.lo  
+LIBTOOL --tag=CXX --mode=link LD foo.lo OCC_LIBS -o foo  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test standard_path_mc_extension && {
+
+$tested foo.mc >result || fail_test "cannot execute"
+
+cat >golden <<__END__
+CPP -x c++ -D__opencxx OCC_INCLUDES foo.mc -o foo.ii  
+TRANS <foo.ii --private--output foo.occ.tmp 2>foo.feedback  
+mv foo.occ.tmp foo.occ  
+cp foo.occ foo.2.ii  
+LIBTOOL --tag=CXX --mode=compile CXX -c foo.2.ii -o foo.lo  
+LIBTOOL --tag=CXX --mode=link LD foo.lo OCC_LIBS -o foo  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+open_test standard_path_cc_extension && {
+
+$tested foo.cc >result || fail_test "cannot execute"
+
+cat >golden <<__END__
+CPP -x c++ -D__opencxx OCC_INCLUDES foo.cc -o foo.ii  
+TRANS <foo.ii --private--output foo.occ.tmp 2>foo.feedback  
+mv foo.occ.tmp foo.occ  
+cp foo.occ foo.2.ii  
+LIBTOOL --tag=CXX --mode=compile CXX -c foo.2.ii -o foo.lo  
+LIBTOOL --tag=CXX --mode=link LD foo.lo OCC_LIBS -o foo  
+__END__
+
+strip_decoration result
+diff -b golden result || fail_test
+
+close_test
+}
+###################################################################
+
+if test x`ls $cmdname.dir` = x; then
+    rmdir $cmdname.dir
+fi
+
+

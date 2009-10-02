@@ -1,0 +1,82 @@
+Wed Feb  6 20:12:57 HKT 2002 Grzegorz Jakacki (jakacki@sourceforge.net)
+
+- Autotools building procedure
+
+Jan 21 2001 Grzegorz Jakacki (jakacki@sourceforge.net)
+
+- typeid support
+
+Tue Dec 18 16:12:14 CST 2001 Grzegorz Jakacki (jakacki@sourceforge.net)
+
+- added INSTALL
+- README broken up into smaller files
+- added testsuite
+
+Thu Dec  6 16:19:12 CST 2001 Grzegorz Jakacki (jakacki@sourceforge.net)
+
+- Changes.txt renamed to ChangeLog
+- Readme.txt renamed to README, (C) msg enhanced
+
+** version 2.5.13
+
+- distinction between default metaclass for classes
+  and class templates Class::ChangeDefaultTemplateMetaclass()
+
+- miscellaneous bugfixes
+
+** version 2.5.12
+
+- Environment::IsNamespace() was added.
+
+- ClassWalker was changed so that TranslateFunctionCall() is
+  invoked for a C function.
+
+
+** version 2.5.11
+
+- Namespaces have been supported.
+
+
+** version 2.5.10
+
+- A bug was fixed so that OpenC++ can process the Microsoft iostream
+  header file.
+
+
+** version 2.5.9
+
+- ref-appendix.html was added to the distribution package.
+
+- TypeInfo::MakePtree() and FullTypeName() were modified
+  to work with templates.
+
+- TypeInfo::NthTemplateArgument() was added.
+
+- classwalk.cc was modified so that Class::TranslateMemberFunction()
+  is invoked on TemplateClass metaobjects.
+
+- TemplateClass::TranslateInstantiation() was added.
+
+- Class::SetMetaclassForFunctions() was added.
+
+- Class::Comments() wad added.
+
+- Environment::GetLineNumber() was added.
+
+
+** version 2.5.8
+
+The bugs listed below were fixed.
+
+- Template types cannot be used as a template parameter.
+  For example,
+	template <class S, template<class T> class C = list> class D { .. };
+  caused a syntax error.
+
+- Program::ReadLineDirective() does not work correctly.
+
+- The lexical analyzer does not recognize __restrict.
+
+- asm () is not supported.
+
+- Class::AppendMember() does not work with a template class.

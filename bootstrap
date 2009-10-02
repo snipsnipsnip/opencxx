@@ -1,0 +1,149 @@
+#! /bin/sh
+#
+# Permission to use, copy, distribute and modify this software and its
+# documentation for any purpose is hereby granted without fee, provided that
+# the above copyright notice appear in all copies and that both that
+# copyright notice and this permission notice appear in supporting
+# documentation.
+#
+# Other Contributors make no representations about the suitability of this
+# software for any purpose. It is provided "as is" without express or
+# implied warranty.
+#
+# 2001-2003 (C) Copyright by Other Contributors.
+#
+# Run this script in every directory containing configure.in
+# if you modify this configure.in or any Makefile.am at its
+# level or below
+#
+TOOLNAME=bootstrap
+VERSION=1.0
+
+EXECDIR=`echo $0 | sed 's/^\(.*\)\/\(.*\)$/\1/'`
+if test :"$EXECDIR": = :: ; then
+    EXECDIR=.
+fi
+
+if $SHELL $EXECDIR/check-autotools --version >/dev/null; then 
+    : 
+else 
+    echo "$TOOLNAME: cannot run \`./check-autotools'" >&2
+    exit 1
+fi
+
+unset ACDIR
+unset AMDIR
+
+ACINCLUDES="-I ."
+SUBDIRS=""
+
+while test :$1: != :: ; do
+    case $1 in
+        --help) 
+            cat << END
+\`bootstrap' rebuilds \`aclocal.m4', \`Makefile.in's and \`configure'.
+It also adds missing utilities.
+
+    USAGE: bootstrap [SUBDIR]... [OPTION]...
+
+    --version         print version and exit
+    --help            print this help and exit
+    --acdir=DIR       sets directory containing aclocal configuration files
+    --amdir=DIR       sets directory containing automake configuration files
+    -I DIR            adds directory to aclocal includes
+
+SUBDIR's are subdirectories to run bootstrap in; if none is give,
+all subdirs containing file 'configure.{in,ac}' are assumed.
+
+END
+            exit
+            ;;
+        --version) 
+            unset Revision
+            echo $Revision: 1.11.2.1 $Revision | while read TRASH VERSION; do 
+                echo "bootstrap $VERSION"
+            done
+            exit
+            ;;
+        --acdir=*)
+            ACDIR="$1"
+            shift
+            ;;
+        --amdir=*)
+            AMDIR="$1"
+            shift
+            ;;
+        -I)
+            ACINCLUDES="$ACINCLUDES -I $2"
+            shift; shift
+            ;;
+        --)
+            shift
+            break 2
+            ;;
+        -*)
+            echo "$TOOLNAME: unrecognized option \`$1', try \`--help'" >&2
+            exit 1
+            ;;
+        *)
+            SUBDIRS="$SUBDIRS $1"
+            shift
+            ;;
+    esac
+done
+
+$SHELL $EXECDIR/check-autotools \
+	--automake=1.6.2 \
+	--autoconf=2.53 \
+	--libtool=1.5.2 \
+|| exit 1
+
+while test :$1: != :: ; do
+    SUBDIRS="$SUBDIRS $1"
+    shift
+done
+
+if test :"$SUBDIRS": = :: ; then
+    SUBDIRS=`find . -name configure.in -or -name configure.ac  \
+        | sed 's/\/configure.in//g
+               s/\/configure.ac//g'`
+fi
+
+THISDIR=`pwd`
+FAILURES=""
+
+no_need_to_run_autoheader() { return ; }
+
+echo $TOOLNAME: About to process: `echo $SUBDIRS`
+
+for SUBDIR in $SUBDIRS; do
+    if cd $THISDIR/$SUBDIR ; then
+        echo "$TOOLNAME: Entering directory \``pwd`'"
+	autoheader=autoheader
+	grep _CONFIG_HEADER \
+	    /dev/null `ls configure.ac configure.in 2>/dev/null` \
+	    >/dev/null \
+	    || autoheader=no_need_to_run_autoheader
+        set -x
+        aclocal $ACDIR $ACINCLUDES \
+	&&	libtoolize --force --copy \
+        &&	$autoheader \
+        &&	automake $AMDIR --foreign --add-missing --copy \
+        &&	autoconf
+        PROBLEMS=$?
+        set +x
+        if test $PROBLEMS != 0 ; then
+            FAILURES="$FAILURES $SUBDIR"
+        fi
+        echo "$TOOLNAME: Leaving directory \``pwd`'"
+    else
+        echo "$TOOLNAME: subdir \`$SUBDIR' not found, skipping"
+        FAILURES="$FAILURES $SUBDIR"
+    fi
+done
+
+if test :"$FAILURES": != :: ; then
+    echo "$TOOLNAME: *** Errors found in: $FAILURES"
+    exit 1
+fi
+

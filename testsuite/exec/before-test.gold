@@ -1,0 +1,6 @@
+call q.Put(3)
+before_Put() is invoked.
+synchronize... suspend the thread while the buffer is full.
+Put() is invoked.
+call q.Peek(3)
+Peek() is invoked.

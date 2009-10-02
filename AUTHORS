@@ -1,0 +1,21 @@
+
+Shigeru Chiba		the original program design and implementation
+
+Michael Buro		gcc-3.1 port, wide chars support
+Grzegorz Jakacki	build system, occ2, test harness, 
+			restructuring, parser isolation
+Pavel Krusina		Irix port
+Renaud Pawlak		ClassGraph example
+Carsten Pfeiffer	various bugfixes
+Ole Reinartz		cygwin port
+Stefan Seefeld		restructuring, parser isolation
+Gilles J. Seguin	configuration, build automation, examples
+Toru Takimoto		examples
+Alexandre Tolmos	gcc-3.1 port, wide chars support, MacOS X port
+
+See also README for acknowledgments.
+
+Please contact Shigeru Chiba (chiba at users.sourceforge.net) 
+and Grzegorz Jakacki (jakacki at users.sourceforge.net) if you feel 
+your contribution has not been appropriately credited.
+

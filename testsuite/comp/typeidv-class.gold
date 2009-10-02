@@ -1,0 +1,4 @@
+typeid ( 5 ).name(  )
+typeid ( some_value  ).name(  )
+typeid ( some_value . val . val + 5 ).name(  )
+typeid ( * c3 ).name(  )

@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: opencxx
+Description: OpenC++ is a toolkit for C++ translators and analyzers.
+Version: @VERSION@
+Libs: -L${libdir} -locc
+Cflags: -I${includedir}/opencxx

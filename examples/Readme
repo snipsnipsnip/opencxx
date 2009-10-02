@@ -1,0 +1,45 @@
+
+OpenC++ Sample Programs
+=======================
+
+* verbose
+
+  An object that prints a message when a member function is called for
+  the object.
+
+* verbose2
+
+  Verbose object with syntax extension
+  Syntax sugar for easily defining verbose objects.
+
+* matrix
+
+  Efficient Matrix Library
+
+  A more efficient matrix class than the ordinary matrix class
+  written in regular C++.  This example also shows how to translate
+  extended syntax.
+
+* before
+  CLOS-like before method.
+
+* wrapper
+
+  A metaclass library for developing your own C++ preprocessor that
+  automatically generates wrapper functions.  
+
+* runtime-mop
+
+  A metaclass library for developing your own runtime MOP.  It provides
+  almost equivalent functionality of OpenC++ version 1.
+
+* graph
+
+  This produces a Tcl/tk script (gclass-test.wish) for drawing
+  the class graph of gclass-test.cc.  The placement of class boxen
+  in the window is not cared about very much but you can drag the
+  box with the left mouse button.  Since the default metaclass is
+  changed, all the classes in gclass-test.cc are parsed and included
+  by the class graph.  This sample program was contributed by
+  Renaud Pawlak (pawlak@ecoledoc.lip6.fr).
+

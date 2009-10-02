@@ -1,0 +1,207 @@
+#!/bin/sh
+#set -x
+
+TOOLNAME=addguards
+VERSION=2.7
+HEADER_PATTERN='*.h|*.H|*.hh|*.hpp'
+AWK=@AWK@
+
+do_addguards() {
+    mv $1 $1~
+    if test "$FORCE_STOPPERS" = yes ; then
+        ADD_STOPPERS=yes
+    else
+        eval "
+            case $1 in
+                $HEADER_PATTERN)   ADD_STOPPERS=yes;;
+                *)		   ADD_STOPPERS=no;;
+            esac
+        "
+    fi
+    if test "$ADD_STOPPERS" = yes ; then
+        echo \#ifndef $DEFNAME >$1
+        echo \#define $DEFNAME >>$1
+    fi
+    if [ -n "$HEADER_FILE" ]; then cat $HEADER_FILE >>$1; fi
+    cat $1~ >>$1
+    echo >>$1
+    if test "$ADD_STOPPERS" = yes ; then
+        echo \#endif '/* !' $DEFNAME '*/' >>$1
+    fi
+}
+
+message() {
+    if test "$QUIET" != yes ; then echo $* >&2; fi
+}
+
+if [ -z "$TMP" ]; then
+    TMP=/tmp
+fi
+
+TMP_FILE=$TMP/$TOOLNAME.$$
+
+PARSER='
+    BEGIN { processed=1; STPR="__undefined_guard__" }
+    (lineno==0  &&  $0~/^#ifndef/) { name1 = $2; line = $1 " " STPR }
+    (lineno==1  &&  $0~/^#define/) { name2 = $2; line = $1 " " STPR }
+    ($0 !~ /^( |\t)*$/) {
+        lineno = lineno + 1;
+        endif=0;
+        if ($0 ~ /^#endif/ && (                         \
+                ($2 == name1)                           \
+                || (($2 $3 $4) == ("/*!" name1))        \
+                || (($2 $3 $4) == ("/*!" name1 "*/"))   \
+                || (($2 $3 $4) == ("//!" name1))        \
+           )                                            \
+        ) {
+            line = $1 " /* ! " STPR " */";
+            endif=1;
+            if ($0 != ("#endif /* ! " name1 " */")) {
+                old_format = 1;
+            }
+        }
+    }
+
+    { if (line == 0) line = $0; print line; line = 0 }
+
+    END { 
+        if (name1 == 0  ||  name1 != name2  ||  (! endif)) exit 0; #not processed
+        if (old_format) exit 2; #processed, but requires update due to wrong #endif format
+        if (name1 == STPR && name2 == STPR && endif) exit 1; #processed, up to date
+        exit 2; #processed, requires update
+    }
+'
+
+SED_PROGRAM='
+s/-/_/g
+s/\./_/g
+s/\+/_/g
+s/\$/_/g
+s/\#/_/g
+s/\//_/g
+'
+
+version() {
+    echo $TOOLNAME $VERSION
+}
+
+help() {
+    cat <<END
+'$TOOLNAME' is a simple utility that adds preprocessor directives (guards)
+to the C header file in order to prevent multiple inclusions
+of this file. Additionally it adds the header (usually comment describing
+the file contents) to the processed files.
+
+Usage: $TOOLNAME [OPTION]... [FILE]...
+
+Options:
+      --help                  print this help, then exit
+      --version               print version number, then exit
+  -h, --header FILE           specifies header to include in the file
+  -c, --create                force creation if file does not exist
+  -p, --prepend-dirs N        prepends N levels of dirs to the guard;
+                              without this option the guard is created out
+                              of the file name, possibly with supplied path
+  -u, --update                forces update of guards in the existing
+                              files (useful when file name changes)
+      --update-only           do not touch files that are not processed;
+                              implies \`--update'
+  -q, --quiet                 suppress normal output
+  -f, --force-guards        force inserting guards even if file name
+                              does not match $HEADER_PATTERN
+
+If the header is not specified .$TOOLNAME.header is used.
+The old FILE is renamed to FILE~. Attempt to process FILE~ is rejected.
+END
+}
+
+
+###########################################################
+# get args
+###########################################################
+
+OPTIONS=yes
+FORCE_STOPPERS=no
+
+while test "$OPTIONS" = yes ; do
+case $1 in
+    --version)		 version; exit;;
+    --help)		 help; exit;;
+    -h|--header)	 HEADER_FILE=$2; shift; shift;;
+    -c|--create)	 CREATE=yes; shift ;;
+    -p|--prepend-dirs)	 PREPEND=$2; shift; shift;;
+    -u|--update)	 UPDATE=yes; shift;;
+       --update-only)	 UPDATE=yes; UPDATE_ONLY=yes; shift;;
+    -q|--quiet)		 QUIET=yes; shift;;
+    -f|--force-guards) shift ; FORCE_STOPPERS=yes;;
+    --)			 shift ; OPTIONS=no;;
+    -*)			 echo "$TOOLNAME: unknown option '$1', try '--help'" >&2
+    			 exit 1;;
+    *)			 OPTIONS=no;;
+esac
+done
+
+###########################################################
+# determine header file to use
+###########################################################
+if [ \( -z "$HEADER_FILE" \) -a \( -r .$TOOLNAME.header \) ]; then
+    HEADER_FILE=.$TOOLNAME.header
+fi
+
+###########################################################
+# process
+###########################################################
+while [ -n "$1" ]; do
+    if ${AWK} 'BEGIN{if ("'$1'"~/~$/) exit 0}END{exit 1}' </dev/null; then
+        message "skipping $1, invalid filename"
+        shift
+        continue
+    fi
+    if [ -z "$PREPEND" ]; then
+        DEFNAME=`echo $1 | sed "$SED_PROGRAM"`
+    else
+        DEFNAME=`echo \`pwd\`/$1 \
+            | ${AWK} 'BEGIN{FS="/"}{i=NF-('$PREPEND'); while(i<=NF) {printf "/" $i; i++} printf "\n"}' \
+            | sed "$SED_PROGRAM"`
+    fi
+    DEFNAME=`echo $DEFNAME | sed 's/__*/_/g' | sed 's/^_//'`
+    DEFNAME="guard_$DEFNAME"
+    SKIP=""
+    if [ ! -r "$1" ]; then
+        if [ -z "$CREATE" ]; then
+            echo "$TOOLNAME: cannot open '$1'" >&2
+            SKIP=1
+        else
+            echo >$1	# thus we do not depend on `touch'
+        fi
+    fi
+    if [ -z "$SKIP" ]; then
+        ${AWK} "$PARSER" STPR=$DEFNAME $1 >$TMP_FILE
+        STATUS=$?
+        if test "$UPDATE" != yes ; then
+            if [ $STATUS -eq 0 ]; then #---not processed
+                message "modifying $1"
+                do_addguards $1
+            else #---processed
+                message "skipping $1, already processed"
+            fi
+        else
+            case $STATUS in
+                0) #---not processed
+                    do_addguards $1
+                    ;;
+                1) #---processed, up to date
+                    message "skipping $1, up-to-date"
+                    ;;
+                2) #---processed, requires update
+                    message "updating $1"
+                    mv $1 $1~
+                    mv $TMP_FILE $1
+                    ;;
+            esac
+        fi
+        rm -f $TMP_FILE
+    fi
+    shift
+done
+

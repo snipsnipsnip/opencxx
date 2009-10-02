@@ -1,0 +1,248 @@
+dnl Process this file with autoconf to produce a configure script.
+
+#@beginlicenses@
+#@license{contributors}{2001-2003}@
+#
+#  Permission to use, copy, distribute and modify this software and its  
+#  documentation for any purpose is hereby granted without fee, provided that
+#  the above copyright notice appears in all copies and that both that copyright
+#  notice and this permission notice appear in supporting documentation.
+# 
+#  Other Contributors (see file AUTHORS) make(s) no representations about the suitability of this
+#  software for any purpose. It is provided "as is" without express or implied
+#  warranty.
+#  
+#  Copyright (C) 2001-2003 Other Contributors (see file AUTHORS)
+#
+#@endlicenses@
+
+dnl # :WARNING: Intentionally some comments are just shell comments,
+dnl #     not Autoconf comments --- they are to be passed to the
+dnl #     Makefile (for debugging, readibility of 'configure' etc.).
+
+# Initialization
+# ==============
+
+AC_INIT(opencxx/mop.h)
+AM_CONFIG_HEADER(config.h)
+AC_CANONICAL_TARGET
+
+PACKAGE=opencxx
+VERSION=2.8
+
+AM_INIT_AUTOMAKE($PACKAGE, $VERSION)
+AC_SUBST(PACKAGE)
+AC_SUBST(VERSION)
+
+dnl #
+dnl # We will be handling dlopen through Libtool
+dnl #
+AC_LIBTOOL_DLOPEN	
+AC_LIBLTDL_INSTALLABLE
+
+AC_ARG_WITH(gnu-ld, 
+    [  --with-gnu-ld           assume the C compiler uses GNU ld [default=no]],
+    test "$withval" = no || with_gnu_ld=yes, 
+    with_gnu_ld=no)
+
+AC_PROG_CC
+AC_PROG_CPP
+AC_PROG_CXX
+AM_PROG_CC_C_O
+AC_LANG(C++)
+
+# Optimizations
+# =============
+
+AC_ARG_ENABLE([opt-level],
+    [  --enable-opt-level=@<:@none,medium,high@:>@ Set optimization level @<:@medium@:>@],
+    [opt_level=$enableval],
+    [opt_level=medium]
+)
+
+AC_MSG_CHECKING([requested optimization level])
+AC_MSG_RESULT([$opt_level])
+
+AC_MSG_CHECKING([how to specify optimization level])
+case "$opt_level" in
+    medium) ;;
+    *)
+        if test "x$GXX" != xyes; then
+            AC_MSG_ERROR([don't know how to specify $opt_level optimization level for $CXX])
+        else
+            case "$opt_level" in
+                none) CFLAGS=`echo " $CFLAGS " | sed 's/-O2/-O0/'`
+                      CXXFLAGS=`echo " $CFLAGS " | sed 's/-O2/ -O0 /'`
+                      ;;
+                high) CFLAGS=`echo " $CFLAGS " | sed 's/-O2/-O3/'`
+                      CXXFLAGS=`echo " $CFLAGS " | sed 's/-O2/-O3/'`
+                      ;;
+            esac
+        fi
+        ;;
+esac
+AC_MSG_RESULT([$CFLAGS])
+      
+AC_PROG_AWK
+AC_SUBST(AWK)
+
+
+dnl # :WARNING: Do not run AC_PROG_RANLIB here, 
+dnl #     this is already done by AC_PROG_LIBTOOL or AM_PROG_LIBTOOL
+
+#AC_DISABLE_SHARED
+AC_LIBTOOL_WIN32_DLL
+AM_PROG_LIBTOOL
+
+dnl # :WARNING: AM_PROG_LIBTOOL should be changed to AC_PROG_LIBTOOL
+dnl #     but currently some versions of Automake complain if they
+dnl #     do not see AM_PROG_LIBTOOL
+
+AC_PROG_INSTALL
+
+dnl # Configure libltdl
+AC_LIB_LTDL
+AC_SUBST(LIBLTDL)
+AC_SUBST(INCLTDL)
+if test x${ac_cv_lib_ltdl_lt_dlinit} != xyes; then
+  AC_MSG_ERROR([libltdl not found; verify that libtool package is installed])
+fi
+
+dnl # Checks for headers
+AC_HEADER_STDC
+AC_CHECK_HEADERS(fcntl.h sys/time.h unistd.h)
+
+dnl # Checks for typedefs, structures, and compiler characteristics.
+AC_C_CONST
+AC_C_INLINE
+AC_TYPE_SIZE_T
+AC_HEADER_TIME
+
+dnl # Checks for library functions.
+AC_FUNC_MEMCMP
+AC_CHECK_FUNCS(gettimeofday)
+dnl # gettimeofday is used for creating temporary filenames
+
+test "$with_gnu_ld" = yes && export_dynamic="-export_dynamic"
+AC_SUBST(export_dynamic)
+dnl # :TODO: Why?
+
+AC_CHECK_PROG([diff],[diff],[diff],[none])
+if test "x$diff" = xnone; then
+    AC_MSG_ERROR(['diff' not found; cannot continue])
+fi
+AC_SUBST(diff)
+
+OCC_PROG_BASH
+if test -z "$BASH_SH"; then
+    AC_MSG_WARN([You may be unable to run tests])
+    BASH_SH=$SHELL
+fi
+AC_SUBST(BASH_SH)
+
+AC_SUBST(abs_top_builddir)
+AC_SUBST(abs_top_srcdir)
+AC_SUBST(bindir)
+AC_SUBST(target)
+AC_SUBST(ac_configure_args)
+
+occ_libraries="-L${libdir} -locc $libgc"
+occ_includes="-I${includedir}"
+AC_SUBST(occ_libraries)
+AC_SUBST(occ_includes)
+
+# GC
+# ==
+AC_ARG_ENABLE([gc],
+    [  --disable-gc                 don't use GC],
+    [],
+    [enable_gc=no]
+)
+
+AC_MSG_CHECKING([whether to use garbage collector])
+AC_MSG_RESULT([$enable_gc])
+
+if test "x$enable_gc" != xno; then
+    AC_LANG_PUSH([C])
+    SAVED_LIBS=$LIBS
+    libgc='-lgc'
+    LIBS=$libgc
+    AC_MSG_CHECKING([whether -lgc provides GC_malloc])
+    AC_LINK_IFELSE([int GC_malloc(); int main() { GC_malloc(); }],
+        [AC_MSG_RESULT([yes])],
+        [
+            AC_MSG_RESULT([no])
+            libgc='-lgc -ldl'
+            LIBS=$libgc
+            AC_MSG_CHECKING([whether -lgc -ldl provide GC_malloc])
+            AC_LINK_IFELSE([int GC_malloc(); int main() { GC_malloc(); }],
+                [AC_MSG_RESULT([yes])],
+                [
+                    AC_MSG_RESULT([no])
+                    AC_MSG_ERROR([libgc not found; set up paths or --disable-gc])
+                ]
+            )
+        ]
+    )
+    LIBS=$SAVED_LIBS
+    AC_CHECK_HEADER([gc.h], [], 
+        [AC_MSG_ERROR([gc.h not found; set up paths or --disable-gc])]
+    )
+    AC_LANG_POP([C])
+    AC_CHECK_HEADER([gc/gc_cpp.h], [], 
+        [AC_MSG_ERROR([gc/gc_cpp.h not found; set up paths or --disable-gc])]
+    )
+    AC_DEFINE([DONT_GC],[0],[enable garbage collection])
+    GC_BRIDGE=$srcdir/opencxx/parser/GC-enabled.h
+else
+    libgc=''
+    AC_DEFINE([DONT_GC],[1],[disable garbage collection])
+    GC_BRIDGE=$srcdir/opencxx/parser/GC-disabled.h
+fi
+if test x$libgc = xerror; then
+    AC_MSG_ERROR([garbage collector library not functional; try --disable-gc])
+fi
+AC_SUBST(libgc)
+AC_SUBST(enable_gc)
+AC_SUBST(builddir)
+AC_SUBST_FILE(GC_BRIDGE)
+
+# Writing the Makefiles
+# =====================
+
+AC_CONFIG_SUBDIRS([libltdl])
+
+AC_CONFIG_COMMANDS([ptree-gen],
+    [(cd opencxx/parser && chmod +x ptree-gen && ./ptree-gen)],
+    [])
+
+AC_CONFIG_COMMANDS([chmods],
+    [
+        chmod +x testsuite/tester2
+        chmod +x occ2
+    ],
+    [])
+
+AC_OUTPUT([
+    Makefile
+    occ2
+    opencxx.pc
+    buildinfo/Makefile
+    scripts/Makefile
+    scripts/libocc-config
+    tools/addguards
+    html/Makefile
+    testsuite/tester2
+    testsuite/Makefile
+    opencxx/Makefile
+    opencxx/parser/ptree-gen
+    opencxx/parser/GC.h
+    examples/Makefile
+    examples/Makefile.global
+    examples/before/Makefile
+    examples/matrix/Makefile
+    examples/runtime-mop/Makefile
+    examples/verbose/Makefile
+    examples/verbose2/Makefile
+    examples/wrapper/Makefile
+])

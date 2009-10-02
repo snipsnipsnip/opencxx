@@ -1,0 +1,10 @@
+prefix=/home/jakacki/tmp/opencxx-installed
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: opencxx
+Description: OpenC++ is a toolkit for C++ translators and analyzers.
+Version: 2.8
+Libs: -L${libdir} -locc
+Cflags: -I${includedir}/opencxx

@@ -1,0 +1,12 @@
+class Inner  {
+    public :
+      Inner (  ) {
+        cerr << "-- Outer_1::Inner()" << endl ;
+    }
+}
+class Inner  {
+    public :
+      Inner (  ) {
+        cerr << "-- Outer_1::Inner()" << endl ;
+    }
+}

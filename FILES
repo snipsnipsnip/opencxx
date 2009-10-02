@@ -1,0 +1,29 @@
+Files
+=====
+
+(At least some of them:)
+
+doc/			misc documentation, including:
+doc/reference,pdf	Reference manual(PDF)
+doc/ref-appendix.html	Appendix of the Reference Manual (PDF)
+html/			Reference Manual (HTML)
+opencxx/			Compiler source
+sample/			Sample programs
+sample/Makefile		Makefile using a dynamic loader
+sample/Makefile.static	Makefile to build sample programs without
+			a dynamic loader.  All metaclasses are
+			compiled and statically linked to the OpenC++
+			compiler.
+sample/Makefile.Win	Makefile for Win32.  Make sure that occ.exe,
+			occ.lib, gc.lib, and gc.dll are under sample/.
+			(:WARNING: not tested with Autoconf builf)
+libltdl/		Libtool scripts used internally by the build
+			procedure
+scripts/		scripts to be installed
+scripts/libocc-config	the scripts that reports command-line options
+			necessary to link with libocc.a
+testsuite/		tests
+tmplib/			the facility for provisional installation of
+			libraries on platforms that require it
+
+[the end]

@@ -1,0 +1,156 @@
+MUST DO:
+
+* Why parser-test must link against on CerrErrorLog ???
+
+* Remove docs and handling of "Finalize" which has been obsoleted.
+
+* TypeInfo and Encoding must be artificially kept in synch for some reason.
+  Factor out the common functionality.
+
+* The internals of encoding are not encapsulated at all,
+  in particular EncodingUtil and TypeInfo know about them
+  (perhaps there are dependencies also elsewhere, encodings
+  are passed just as char*'s). Encapsulate Encoding, so that
+  it can be safely extended to handle more complicated types.
+
+* There is cyclic link-time dependency between EncodingUtil and
+  Environment
+
+* Encoding has quite weak dependency on Environment, which
+  makes parser dependent on Environment. Break.
+
+* Add example from Jean-Sebastien Mouret to samples/ directory
+
+* g++ is now hardcoded in OpencxxConfiguration.h
+  Make it flexible.
+
+* merge VC++ path from Asen Kovachev
+
+* Debug gc-related hash table bug on MacOSX.
+
+* parser-test has link-time dependencies on too many modules/libraries
+  (e.g. libltdl, Encoding, Environment, TheErrorLog,
+  TypeInfo, Walker, ClassWalker, Class, Metaclass, MetaclassRegistry).
+  Remove those dependencies.
+
+* Metaclass depends on driver2.cc and MetacompilerConfiguration
+  because it does some tricks with compilation. Why does it need to do so?
+  Factor out this responsibility.
+
+* The class Program contains code for replacing fragments of source. 
+  See if this code needs to depend on Ptree. If so, factor out
+  to break dependency between Program and ptree.
+
+* The class Program depends on Ptree, token-names, Class and MetaclassRegistry.
+  Break dependency.
+
+* Two ptree classes are friends to parser. Find out why and 
+  break this dependency.
+
+* factor out configuration options (now they are accessed
+  with random 'extern' declarations scattered all over)
+  (this is a must for parser provided that parser really depends
+  on those options; if not, this can be done later).
+
+* what is NameScope and why it is in Walker iface?
+
+* remove dependencies of Ptree on Encoding
+  [all dependencies in code removed, there are only several dependencies
+   in iface left, which are currently deprecated; remove in 2.9]
+
+* Ptree and PtreeArray are cyclically dependent. Break the dependency.
+
+* Ptree and NonLeaf are cyclically dependent. Break the dependency.
+
+* Lots of functionality that is present as Ptree as static memeber functions
+  is introducing cyclic dependencies between Ptree and other classes.
+  It can be demoted to separate module, which would depend on Ptree.
+  (WARNING: this would change the published interface of Ptree)
+  [static functions were moved to PtreeUtil and PtreeTypeUtil,
+   and left in Ptree as deprecated; remove in 2.9]
+  
+* PtreeExprStatement does not fit the scheme in ptree-gen because
+  the Walker function is called 'TranslateExprStatement', not
+  'TranslateExpr' as e.g. for 'TranslateLabel'. Fix and move
+  PtreeExprStatement.{h,cc} into ptree-generated.{h,cc}.
+
+* Check if classes in parser/ that are defined by hand cannot be
+  moved into ptree-generated.{h,cc}
+
+* 'ProgramFromStdin' buffer size is hardcoded and for some 
+  preprocessors (gcc-3.2.1) it is too small even for test programs.
+  Make it more flexible (use std::vector?).
+
+OTHER
+
+* why walker has 'GetParser()' ? And why does it have to store
+  reference to parser anyway? (maybe to be able to resolve Ptree* to
+  SourceLocation?) Remove if possible (or maybe create iface class?)
+
+* what is Walker::argument_name and why does it have to have it?
+
+* what are static Walker::default_parser, Walker::default_metaclass
+  and Walker::default_template_metaclass ??? Perhaps should
+  be replaced by global metaclass factory?
+
+* Reimplement PtreeArray using std::vector. (Before we get correct parsing
+  of all STL headers right this should be done in such a way that
+  vector is not visible in PtreeArray.h, only in implementation.
+  Use pimpl idiom?)
+
+* Reporting errors through special object (not directly to cerr)
+  is important for reliable unit testing. Currently some modules
+  use 'ErrorLog' object and 'Msg' hierarchy to report errors.
+  However, some modules now depend on global 'TheErrorLog()'.
+  Find out how to reduce this kind of dependency.
+
+* invstigate if there is no cyclic dependency between Class and ClassArray.
+  Fix if necessary.
+
+* Move out and deprecate error reporting mechanism present in
+  Walker.
+
+* Set up a basic unit testing for type encoding. Reimplement type encoding
+  so that it handles identifiers of arbitrary length (either use internal
+  tree representation or take better encoding; perhaps we can use gcc-2.95
+  or gcc-3.x encoding, which would enable us to use c++filt for debugging).
+
+* Parser needs to be able to tell if a symbol is a template in
+  current scope. Introduce iface that lets parser get this
+  information.
+
+* clean up metaclass code wrt. #ifdefs checking for different 
+  dynamic linkers
+
+* introduce class factory??? (already have MetaclassRegistry)
+
+* investigate need for Walker::IsClassWalker(). If absolutely
+  necessary, replace with dynamic_cast<>().
+
+* Make ClassWalker inherit publicly from AbstractWalker and
+  implement its functionality either by aggregating or 
+  inheriting Walker privately.
+
+* factor out metaclass loading out of Metaclass.h ?
+
+* break dependency on concrete walkers by introduction of walker factory
+
+* break dependency Environment -> Class
+
+* break dependency Class -> ClassWalker, Walker
+
+* break dependency of parser-test on TypeInfo
+
+--------- after 2.8 ----------
+
+* Remove deprecated functions
+
+* Move public constants from Encoding.h into
+  PtreeConstants::
+
+* fix examples/runtime-mop
+
+* fix examples/wrapper
+
+* fix examples/graph
+

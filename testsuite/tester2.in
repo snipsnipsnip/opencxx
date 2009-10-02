@@ -1,0 +1,198 @@
+#!/bin/sh
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+bindir=@bindir@
+libdir=@libdir@
+includedir=@includedir@
+top_builddir=@top_builddir@
+abs_top_builddir=@abs_top_builddir@
+srcdir=@srcdir@
+abs_srcdir=@abs_srcdir@
+host=@host@
+exit_after_first_error=no
+test x$CPPFLAGS = x && CPPFLAGS=@CPPFLAGS@
+test x$LDFLAGS  = x && LDFLAGS=@LDFLAGS@
+
+OCC2="${abs_top_builddir}/occ2 $CPPFLAGS $LDFLAGS"
+INCLUDES="-I${srcdir}
+	  -I${srcdir}/opencxx
+	  -I${srcdir}/gc"
+LIBS="-L${top_builddir} -locc @libgc@ -lltdl"
+LIBTOOL=${abs_top_builddir}/libtool
+CXX=@CXX@
+EXEEXT=@EXEEXT@
+failed=0
+skipped=0
+passed=0
+
+# cleanup TESTNAME
+cleanup() {
+    (
+        cd testsuite.dir/$1  &&  rm -f *  &&  rm -rf .libs
+        while test "x`ls`" = x; do
+            empty_dir=`pwd`
+            cd ..
+            rmdir $empty_dir
+        done
+    )
+}
+
+# prepare TESTNAME
+prepare() {
+    mkdir -p testsuite.dir/$1
+    (cd testsuite.dir/$1  &&  rm -f *  &&  rm -rf .libs)
+}
+
+# wrapup TESTNAME RESULT
+#
+wrapup() {
+    echo $2: $1  | tee -a tester2.log    
+    case "$2" in
+        FAIL) failed=`expr $failed + 1`;;
+        SKIP) skipped=`expr $skipped + 1`;;
+        PASS) passed=`expr $passed + 1`;;
+        *) echo "tester2: WARNING: unidentified test result \`$2'";;
+    esac
+    if test x"$exit_after_first_error" = xyes  &&  test $2 = FAIL; then
+        finish
+    fi
+}
+
+# test_compilation DIR NAME SKIP
+#
+test_compilation() {
+    dir=$1
+    name=$2
+    options=compilation
+    testname=$dir/$name/$options
+    echo Testing $testname ... | tee -a tester2.log
+    test "x$3" = xskip && { wrapup $testname SKIP; return; }
+    prepare $testname
+    ( set -ex
+    cd testsuite.dir/$testname
+    #ln -s ${abs_srcdir}/${dir}/${name}-class.mc
+    $OCC2 ${abs_srcdir}/${dir}/${name}-class.mc -o ${name}-class${EXEEXT}
+    #ln -s ${abs_srcdir}/${dir}/${name}-test.cc
+    libtool -dlopen ${abs_top_builddir}/opencxx/libocc_mop.la --mode=execute \
+        ./${name}-class${EXEEXT} -E ${abs_srcdir}/${dir}/${name}-test.cc > stdout
+    #ln -s ${abs_srcdir}/${dir}/${name}-class.gold
+    diff stdout ${abs_srcdir}/${dir}/${name}-class.gold
+    ) >>tester2.log 2>&1
+    if test $? = 0; then 
+        result=PASS
+    else 
+        result=FAIL
+    fi
+    wrapup $testname $result
+    test $result = PASS  &&  cleanup $testname
+}
+
+# test_compilation_plugin DIR NAME SKIP METACLASS
+#
+test_compilation_plugin() {
+    dir=$1
+    name=$2
+    options=compilation-via-plugin
+    testname=$dir/$name/$options
+    metaclass=$4
+    echo Testing $testname ... | tee -a tester2.log
+    test "x$3" = xskip && { wrapup $testname SKIP; return; }
+    prepare $testname
+    ( set -ex
+    cd testsuite.dir/$testname
+    #ln -s ${abs_srcdir}/${dir}/${name}-class.mc
+    $OCC2 -m ${abs_srcdir}/${dir}/${name}-class.mc
+    #$LIBTOOL --mode=install cp ${metaclass}.la ${metaclass}-init.la `pwd`
+    #ln -s ${abs_srcdir}/${dir}/${name}-test.cc 
+    $OCC2 -S $metaclass -E ${abs_srcdir}/${dir}/${name}-test.cc > stdout
+    #ln -s ${abs_srcdir}/${dir}/${name}-class.gold
+    diff stdout ${abs_srcdir}/${dir}/${name}-class.gold
+    ) >>tester2.log 2>&1
+    if test $? = 0; then 
+        result=PASS
+    else 
+        result=FAIL
+    fi
+    wrapup $testname $result
+    test $result = PASS  &&  cleanup $testname
+}
+
+# test_execution DIR NAME SKIP
+#
+test_execution() {
+    dir=$1
+    name=$2
+    options=execution
+    testname=$dir/$name/$options
+    echo Testing $testname ... | tee -a tester2.log
+    test "x$3" = xskip && { wrapup $testname SKIP; return; }
+    prepare $testname
+    ( set -ex
+    cd testsuite.dir/$testname
+    #ln -s ${abs_srcdir}/${dir}/${name}-class.mc 
+    $OCC2 ${abs_srcdir}/${dir}/${name}-class.mc -o ${name}-class${EXEEXT}
+    #ln -s ${abs_srcdir}/${dir}/${name}-test.cc
+    libtool -dlopen ${abs_top_builddir}/opencxx/libocc_mop.la --mode=execute \
+        ./${name}-class${EXEEXT} $INCLUDES -c ${abs_srcdir}/${dir}/${name}-test.cc
+    $LIBTOOL --mode=link --tag=CXX $CXX ${name}-test.o -L${abs_top_builddir} \
+	-locc -o ${name}-test${EXEEXT}
+    ./${name}-test${EXEEXT} >stdout
+    #ln -s ${abs_srcdir}/${dir}/${name}-test.gold
+    diff stdout ${abs_srcdir}/${dir}/${name}-test.gold
+    ) >>tester2.log 2>&1
+    if test $? = 0; then 
+        result=PASS
+    else 
+        result=FAIL
+    fi
+    
+    wrapup $testname $result
+    test $result = PASS  &&  cleanup $testname
+}
+
+finish() {
+    echo "=============================================================="
+    echo "    PASSes : $passed"
+    echo "    SKIPs  : $skipped"
+    echo "    FAILs  : $failed"
+    echo "    -------------------"
+    echo "    total  : `expr $failed + $skipped + $passed`"
+    echo ""
+    echo "Detailed info has been logged in \`tester2.log'"
+    test $failed -gt 0  &&  exit 1
+    exit 0
+}
+
+log_help() {
+    echo <<__END__
+#
+# Hint: add \`--verbose' to occ2 commandline for more info on what's going on
+#
+__END__
+}
+
+#----- driver begins ------------------
+
+echo Date: `date` >tester2.log
+echo User: $USER >>tester2.log
+echo Host: ${host} >>tester2.log
+test "x$CPPFLAGS" != x  && echo using "CPPFLAGS='$CPPFLAGS'" >>tester2.log
+test "x$LDFLAGS" != x  && echo using "LDFLAGS='$LDFLAGS'" >>tester2.log
+
+log_help >>tester2.log
+
+test_compilation        comp tnested    ""
+test_compilation        comp tstart     ""
+test_compilation        comp typeidv    ""
+test_compilation        comp typeidt    ""
+test_execution          exec before     ""
+test_execution          exec parse1     ""
+test_execution          exec verbose    ""
+test_execution          exec verbose2   ""
+test_compilation_plugin comp tnested    ""    NestedClass
+test_compilation_plugin comp tstart     ""    TstartClass
+test_compilation_plugin comp typeidv    ""    TestClass
+test_compilation_plugin comp typeidt    ""    TestClass
+
+finish 
+

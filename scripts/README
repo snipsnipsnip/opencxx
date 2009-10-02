@@ -1,0 +1,5 @@
+This directory contains:
+
+  * libocc-config --- a script to get the options that you have
+    to supply to your linker when linking with libocc.a
+

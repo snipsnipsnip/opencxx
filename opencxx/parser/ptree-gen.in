@@ -1,0 +1,184 @@
+#!/bin/sh
+#
+#@beginlicenses@
+#@license{Grzegorz Jakacki}{2003-2004}@
+#
+#  Permission to use, copy, distribute and modify this software and its  
+#  documentation for any purpose is hereby granted without fee, provided that
+#  the above copyright notice appears in all copies and that both that copyright
+#  notice and this permission notice appear in supporting documentation.
+# 
+#  Grzegorz Jakacki make(s) no representations about the suitability of this
+#  software for any purpose. It is provided "as is" without express or implied
+#  warranty.
+#  
+#  Copyright (C) 2003-2004 Grzegorz Jakacki
+#
+#@endlicenses@
+#
+#set -x
+cmdname=`echo $0 | sed 's:.*/::'`
+cmdline="$0 $*"
+version=1.0
+
+header=ptree-generated.h
+implementation=ptree-generated.cc
+inclusion_guard=included_ptree_generated_h
+
+kind=none
+
+set_expr() { ##########################################################
+keywords="\
+  Comma Assign Cond Infix Pm Cast Unary Throw Sizeof Typeid Typeof New \
+  Delete Array Funcall Postfix UserStatement DotMember ArrowMember Paren \
+  StaticUserStatement"
+header_template='
+
+namespace Opencxx
+{
+
+class Ptree;
+class AbstractTranslatingWalker;
+class AbstractTypingWalker;
+class TypeInfo;
+
+class Ptree%keyword%Expr : public NonLeaf {
+public:
+    Ptree%keyword%Expr(Ptree* p, Ptree* q) : NonLeaf(p, q) {}
+    int What() { return nt%keyword%Expr; }
+    Ptree* Translate(AbstractTranslatingWalker* w);
+    void Typeof(AbstractTypingWalker*, TypeInfo&);
+};
+
+}
+
+'
+implementation_template='
+namespace Opencxx
+{
+
+Ptree* Ptree%keyword%Expr::Translate(AbstractTranslatingWalker* w)
+{
+    return w->Translate%keyword%(this);
+}
+
+void Ptree%keyword%Expr::Typeof(AbstractTypingWalker* w, TypeInfo& t)
+{
+    w->Typeof%keyword%(this, t);
+}
+
+}
+'
+} 
+
+
+
+set_statement() { ########################################################## 
+keywords="\
+  If Switch While Do For Try Break Continue Return Goto Case \
+  Default Label"
+header_template='
+
+namespace Opencxx
+{
+
+class Ptree;
+class AbstractTranslatingWalker;
+
+class Ptree%keyword%Statement : public NonLeaf {
+public:
+    Ptree%keyword%Statement(Ptree* p, Ptree* q) : NonLeaf(p, q) {}
+    int What() { return nt%keyword%Statement; }
+    Ptree* Translate(AbstractTranslatingWalker* w);
+};
+
+}
+'
+implementation_template='
+namespace Opencxx
+{
+
+Ptree* Ptree%keyword%Statement::Translate(AbstractTranslatingWalker* w)
+{
+    return w->Translate%keyword%(this);
+}
+
+}
+'
+}
+
+set_word() { ##########################################################
+keywords="\
+  AUTO BOOLEAN CHAR WCHAR CONST DOUBLE EXTERN FLOAT FRIEND \
+  INLINE INT LONG MUTABLE NAMESPACE PRIVATE PROTECTED PUBLIC REGISTER SHORT \
+  SIGNED STATIC UNSIGNED USING VIRTUAL VOID VOLATILE UserKeyword2"
+header_template='
+
+namespace Opencxx
+{
+
+class Token;
+
+class Leaf%keyword% : public LeafReserved {
+public:
+    Leaf%keyword%(Token& t) : LeafReserved(t) {}
+    Leaf%keyword%(char* str, int len) : LeafReserved(str, len) {}
+    int What() { return %keyword%; }
+};
+
+}
+'
+implementation_template=''
+}
+
+fail() { ##########################################################
+    echo "$cmdname: $*" >&2
+    exit 1
+}
+
+help() { ##########################################################
+cat << __END__
+  USAGE: $cmdname [OPTION]
+    
+      --help        print this help and exit
+      --version     print version and exit
+      
+__END__
+}
+
+##########################################################
+
+while test "x$1" != x; do
+    case "$1" in
+        expr|statement|word) kind="$1";;
+        --help) help; exit;;
+        --version) echo $cmdname $version; exit;;
+        *) fail "unknown argument \`$1'"
+    esac
+    shift
+done
+
+set -e
+rm -f $header $implementation
+echo "#ifndef $inclusion_guard" >$header
+echo "#define $inclusion_guard" >>$header
+echo '#include <opencxx/parser/NonLeaf.h>' >>$header
+echo '#include <opencxx/parser/LeafReserved.h>' >>$header
+echo '#include <opencxx/parser/token-names.h>' >>$header
+echo "// DO NOT EDIT!!! Generated with \`$cmdline'" >>$header
+echo "// DO NOT EDIT!!! Generated with \`$cmdline'" >>$implementation
+echo '#include <opencxx/parser/ptree-generated.h>' >>$implementation
+echo '#include <opencxx/parser/AbstractTypingWalker.h>' >>$implementation
+echo '#include <opencxx/parser/AbstractTranslatingWalker.h>' >>$implementation
+for kind in expr statement word; do
+    echo -n "$cmdname: generating $kind:"
+    eval "set_$kind"
+    for keyword in $keywords; do
+        echo -n " $keyword"
+        echo "$header_template" | sed 's/%keyword%/'$keyword'/g' >>$header
+        echo "$implementation_template" | sed 's/%keyword%/'$keyword'/g' >>$implementation
+    done
+    echo ""
+done
+echo "#endif /* ! defined($inclusion_guard) */" >>$header
+

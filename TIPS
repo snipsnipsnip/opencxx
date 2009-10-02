@@ -1,0 +1,51 @@
+:WARNING: This file is not up to date with current building system
+    that uses Autoconf.
+
+
+TIPS for installing OpenC++
+===========================
+
+- If you have a trouble to run the OpenC++ compiler, first make sure of
+  LD_LIBRARY_PATH.  It has to include the current directory.
+
+- Some g++ installations uses GNU ld, but this configuration may break
+  dlopen().  ld supplied by the operating system should be used.
+
+- If the operating system is Solaris 2.x, you may need -DSOLARIS_THREADS 
+  to build the garbage collector.  If this option is specified, you also
+  need to edit src/Unix/Makefile.Solaris so that CXXFLAGS includes
+  that option and LIB includes -lthread.
+
+- If your operating system is Solaris 2.6, you should insert:
+
+	typedef unsigned long uint32_t;
+
+  before the line:
+
+	#include <sys/procfs.h>
+
+  in src/gc/os_dep.c.
+
+- If the platform is Win32, Visual C++'s BIN directory has to be
+  in the search path.
+
+- If you have a trouble of the garbage collector, try the latest version
+  available from http://www.hpl.hp.com/personal/Hans_Boehm/gc.
+  Otherwise, the following step-by-step instruction may help you build
+  gc.a.
+
+  Step1: cd src/gc
+  Step2: Change os_dep.c and Makefile if necessary
+  Step3: make test
+	 You should see SUCCEEDED.
+  Step4: make clean c++
+	 You should see "The test appears to have succeeded."
+  Step5: cd ../{Unix,Win32}
+  Step6: make
+  Step7: cd ../gc; make clean
+	 You don't need gc.a any more.
+
+  Note: if your platform is Irix, you have to specify ABI_FLAG (= n32).
+
+
+[the end]

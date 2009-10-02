@@ -1,0 +1,20 @@
+How to add a new test to testsuite/exec
+---------------------------------------
+
+(1) Choose short name for test (TNAME), 
+    (e.g. `before' was used for test made up of one of the samples)
+    make sure it does not clash with any other test in test suite
+
+(2) Prepare the source file `TNAME-class.mc' with metacompiler description.
+
+(3) Prepare the file `TNAME-test.cc' with the source you want to feed
+    to the generated compiler
+
+(4) Prepare the text file `TNAME-test.gold' with expected output
+    of the executable generated from `TNAME-test.cc' with compiler
+    obtained from `TNAME-class.mc'. NOTE: Only stdout output is taken 
+    into consideration.
+
+(5) Add the 3 files to EXTRA_DIST in `../Makefile.am'
+
+(6) Change to the top dir and run `./bootstrap' to rebuild `Makefile.in'

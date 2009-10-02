@@ -1,0 +1,550 @@
+#!/bin/sh
+
+#@beginlicenses@
+#@license{Grzegorz Jakacki}{2003-2004}@
+#
+#  Permission to use, copy, distribute and modify this software and its  
+#  documentation for any purpose is hereby granted without fee, provided that
+#  the above copyright notice appears in all copies and that both that copyright
+#  notice and this permission notice appear in supporting documentation.
+# 
+#  Grzegorz Jakacki make(s) no representations about the suitability of this
+#  software for any purpose. It is provided "as is" without express or implied
+#  warranty.
+#  
+#  Copyright (C) 2003-2004 Grzegorz Jakacki
+#
+#@endlicenses@
+
+cmdname=`echo $0 | sed 's:.*/::'`
+cmddir=`dirname $0`
+verbose=yes
+phase=init
+AWK=@AWK@
+# occ2 -c -o
+#set -x
+
+fail() {
+    echo "$cmdname: $*" >&2
+    exit 1
+}
+
+# verbatim echo --- echoes argument even if it is e.g. '-E'
+vecho() {
+    echo "_$*" | sed 's/^_//'
+}
+
+protect() {
+    case "$1" in
+        *' '*|*"'"*|*'"'*|*'<'*|*'>'*|*'&'*|*'|'*) 
+           echo "'"`vecho "$1" | sed "s/'/\\\\\\\\''\\\\\\\\'/g"`"'";;
+        *) vecho "$1";;
+    esac
+}
+
+execute() {
+    command_line=''
+    redir_output=''
+    redir_input=''
+    while test "x$1" != x; do
+        case $1 in
+            '>') command_line_elem=">`protect $2`"; shift;;
+            '2>') command_line_elem="2>`protect $2`"; shift;;
+            '<') command_line_elem="<`protect $2`"; shift;;
+            *) command_line_elem=`protect "$1"`;;
+        esac
+        if test "x$command_line" = x; then
+            command_line="$command_line_elem"
+        else
+            command_line="$command_line $command_line_elem"
+        fi
+        shift
+    done
+    test x$verbose = xyes && echo "occ2: $phase: $command_line $redir_input $redir_output"
+    if test x$dry_run = xno; then
+        { eval $command_line $redir_input $redir_output;} \
+            || fail "command failed: $command_line $redir_input $redir_output"
+    fi
+}
+
+get_core_filename() {
+    echo $1 | sed '
+        s:.*/::
+        s/[.][^./]*$//'
+    # :FIXME: what if $1 is '-E' ?
+}
+
+help_ifaces() {
+    cat <<__END__
+Available interfaces to \`$cmdname':
+    * 2.0 -- 2.5.13    standard interface since around 1998
+    * 3.0              new interface embracing Libtool
+__END__
+}
+
+help_iface1() {
+    execute $trans -h
+}
+
+help_iface2() {
+    cat <<__END__
+
+    USAGE: occ2 [--iface=VER] OPTS -c SRCFILE
+           occ2 [--iface=VER] OPTS -c SRCFILE... -o OUTFILE
+
+    --iface=VER        sets command line iface to given OpenC++ version
+                       [current version]
+  
+  Compilation stages
+    -n                 Don't preprocess
+    -p                 Don't translate (stop after parsing)
+    -E                 Don't compile (stop after translation)
+    -c                 Don't make executable (stop after compilation)
+    -P                 Preprocess again after translation
+    -m                 Compile a metaclass (make dlopenable plugin)
+  
+  Other:
+    
+    --trans=EXEC       uses EXEC as src-2src translator [$trans]
+    --transplug=EXEC   uses EXEC as plugin runner for src-2-src translation
+                       [$transplug]
+    --valdtr=EXEC      uses EXEC as validator if translator is not run
+                       [$valdtr]
+    --valdtrplug=EXEC  uses EXEC as plugin runner for validation 
+                       [$valdtrplug]
+    -S, --plugin=FILE  uses FILE.la as translator plugin
+    --ld=EXEC          uses EXEC as linker [$ld]
+    --cxx=EXEC         uses EXEC as C++ compiler [$cxx]
+    --cpp=EXEC         uses EXEC as C++ preprocessor [$cpp]
+    --libtool=EXEC     uses EXEC as libtool [$libtool]
+    -IDIR              adds DIR to preprocessor search path
+    -LDIR              adds DIR to linker search path
+    -lNAME             links with libNAME
+    -Wp,<options>      pass comma-separated <options> to preprocessor
+    -Wp1,<options>     pass comma-separated <options> to preprocessor pass 1
+    -Wp2,<options>     pass comma-separated <options> to preprocessor pass 1
+    -Wc,<options>      pass comma-separated <options> to compiler
+    -Wt,<options>      pass comma-separated <options> to trans
+    --verbose          be verbose (print executed commands)
+    --silent, --quiet  be silent
+    --dry-run          don't actually execute anything
+    
+Warning: Above list specifies interface version 3.0 and higher; 
+    use \`$cmdname --iface=VER --help' for other interfaces;
+    use \`$cmdname --help-ifaces' for help on interfaces.
+    
+Examples: 
+    $cmdname foo.cc # preproc, translate, compile and link exec \`foo$exeext'
+    $cmdname -c foo.ii # translate and compile into \`foo.lo'
+    $cmdname -n foo.cc -o bar # translate, compile and link exec \`bar'
+
+__END__
+}
+
+
+mangle() {
+    mangler_pl='my %mangling = (
+             '\''_'\'' => '\''usc'\''
+           , '\''!'\'' => '\''exc'\''
+           , '\''@'\'' => '\''at'\''
+           , '\''#'\'' => '\''hsh'\''
+           , '\''$'\'' => '\''dlr'\''
+           , '\''%'\'' => '\''per'\''
+           , '\''^'\'' => '\''car'\''
+           , '\''&'\'' => '\''amp'\''
+           , '\''*'\'' => '\''sta'\''
+           , '\''('\'' => '\''lpr'\''
+           , '\'')'\'' => '\''rpr'\''
+           , '\''-'\'' => '\''min'\''
+           , '\''+'\'' => '\''pls'\''
+           , '\''='\'' => '\''equ'\''
+           , '\''{'\'' => '\''lbr'\''
+           , '\''}'\'' => '\''rbr'\''
+           , '\'':'\'' => '\''col'\''
+           , '\'';'\'' => '\''scl'\''
+           , '\''"'\'' => '\''quo'\''
+           , "'\''" => '\''bsl'\''
+           , '\''<'\'' => '\''les'\''
+           , '\''>'\'' => '\''mor'\''
+           , '\'','\'' => '\''com'\''
+           , '\''.'\'' => '\''dot'\''
+           , '\''?'\'' => '\''que'\''
+           , '\''['\'' => '\''lsb'\''
+           , '\'']'\'' => '\''rsb'\''
+           , '\''~'\'' => '\''til'\''
+           , '\''/'\'' => '\''sla'\''
+           , '\'' '\'' => '\''spc'\''
+    );
+
+    sub mangle_char {
+        my ($in) = @_;
+        my $c = $mangling{$in};
+        if ($c) { return "_${c}_"; }
+        else { return $in; }
+    }
+
+    sub mangle_string {
+        my ($str) = @_;
+        $str =~ s/(.)/mangle_char($1)/ge;
+        return $str;
+    }
+
+    print mangle_string($ARGV[1]);
+    '
+    perl -e "$mangler_pl" -- mangle "$1"
+}
+
+
+# schedule_file_processing_according_to_active_stages FILE DISPOSITION
+#
+schedule_file_processing_according_to_active_stages() {
+    eval disposition_`mangle $1`=$2
+    if test "x$input_files" = x; then
+        single_input_file=yes
+    else
+        single_input_file=no
+    fi
+    input_files="$input_files $1"
+}
+
+what_to_do_with_file() {
+    case .$forced_file_ext`test "x$forced_file_ext" = x && echo $1` in
+        *.cc|*.mc)      echo preproc1;;
+        *.$cppext|*.ii) echo validate;;
+        *.occ|*.2.cc)   echo preproc2;;
+        *.2.ii)         echo compile;;
+        *.lo)           echo link;;
+        *)              echo unknown;;
+    esac
+}
+
+add_input_file() {
+    case `what_to_do_with_file $1` in
+        preproc1)
+            disposition=preproc1-$stage_preproc1,validate-$stage_validate,translate-$stage_translate,preproc2-$stage_preproc2,compile-yes;;
+        validate) 
+            disposition=validate-$stage_validate,translate-$stage_translate,preproc2-$stage_preproc2,compile-yes;;
+        preproc2)
+            disposition=preproc2-$stage_preproc2,compile-yes;;
+        compile)
+            disposition=compile-yes;;
+        link)
+            disposition='';;
+        unknown)
+            fail "don't know how to handle file \`$1'";;
+    esac
+    
+    schedule_file_processing_according_to_active_stages $1 $disposition
+}
+
+# find_output_filename STAGE STANDARD_OUTPUT_FILENAME
+#
+find_output_filename() {
+    if test $single_input_file = yes \
+    && test $stop_after = $1 \
+    && test "x$output_file" != x ; 
+    then
+        echo $output_file
+    else 
+        echo $2
+    fi
+}
+
+retrieve_file_dispositions() {
+    eval echo '$'disposition_`mangle $1`
+}
+
+# get_arg_val PREFIX COMMAND_LINE_OPTION
+#
+get_arg_val() {
+    echo "$2" | sed "s/$1//"
+}
+
+######################################################
+
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+bindir=@bindir@
+abs_top_builddir=@abs_top_builddir@
+abs_top_srcdir=@abs_top_srcdir@
+
+cxx="@CXX@"
+cpp="@CXXCPP@"
+ld="@CXX@"
+
+if test `cd $cmddir && pwd` = $abs_top_builddir ; then
+    occ_exec="libtool -dlopen ${abs_top_builddir}/opencxx/libocc_mop.la \
+        --mode=execute ${abs_top_builddir}/occ"
+    occ_libraries="-L${abs_top_builddir} @occ_libraries@"
+    occ_includes="-I${abs_top_srcdir} -I${abs_top_builddir} @occ_includes@"
+else
+    occ_exec=${bindir}/occ
+    occ_libraries="@occ_libraries@"
+    occ_includes="@occ_includes@"
+fi
+
+cppext=ii
+occ="${occ_exec} --private--external-driver"
+libtool=libtool
+trans="$occ -E"
+transtoplug="$occ -E -m"
+transplug="$occ --private--libtool-plugins -S"
+valdtr="$occ -p"
+valdtrplug="$occ -p -S"
+plugin=''
+forced_file_ext=''
+preproc_opts=''
+preproc1_opts=''
+preproc2_opts=''
+
+
+stage_preproc1=yes
+stage_validate=yes
+stage_translate=yes
+stage_preproc2=no
+stop_after=link
+
+link_mode=exec
+iface_version=2
+verbose=no
+dry_run=no
+
+input_file=''
+output_file=''
+mode=''
+includes=''
+single_input_file=no
+
+while test "x$1" != x; do
+    case $1 in 
+        -o) test "x$output_file" != x && { 
+                fail "multiple '-o' options not allowed";
+            }
+            shift
+            output_file="$1"
+            ;;
+        -I*)     includes="$includes $1";;
+        -l*)     libraries="$libraries $1";;
+        -L*)     libraries="$libraries $1";;
+        --occ-libs=*)   occ_libraries=`get_arg_val --occ-libs= "$1"`;;
+        --occ-libs)     occ_libraries="$2"; shift;;
+        --occ-includes=*) occ_includes=`get_arg_val --occ-includes= "$1"`;;
+        --occ-includes)   occ_includes="$2"; shift;;
+        --trans)        trans="$2"; shift;;
+        --trans=*)      trans=`get_arg_val --trans= "$1"`;;
+        --transplug)    transplug="$2"; shift;;
+        --transplug=*)  transplug=`get_arg_val --transplug= "$1"`;;
+        --valdtr)       valdtr="$2"; shift;;
+        --valdtr=*)     valdtr=`get_arg_val --valdtr= "$1"`;;
+        --valdtrplug)   valdtrplug="$2"; shift;;
+        --valdtrplug=*) valdtrplug=`get_arg_val --valdtrplug= "$1"`;;
+        -n) stage_preproc1=no;;
+        -p) stop_after=validate;;
+        -E) stop_after=translate;;
+        -c) stop_after=compile;;
+        -P) stage_preproc2=yes;;
+        -m) stop_after=link; link_mode=plugin;;
+        --ld=*)  ld=`get_arg_val --ld= $1`;;
+        --ld)    ld="$2"; shift;;
+        --cxx=*) cxx=`get_arg_val --cxx= $1`;;
+        --cxx)   cxx="$2"; shift;;
+        --cpp=*) cpp=`get_arg_val --cpp= $1`;;
+        --cpp)   cpp="$2"; shift;;
+        --libtool=*) libtool=`get_arg_val --libtool= $1`;;
+        --libtool)   libtool="$2"; shift;;
+        --plugin=*)  plugin=`get_arg_val --plugin= $1`;;
+        -S|--plugin) plugin="$2"; shift;;
+        -Wp,*)   preproc_opts="$preproc_opts "`get_arg_val -Wp, "$1" | sed 's/,/ /g'`;;
+        -Wp1,*)  preproc1_opts="$preproc1_opts "`get_arg_val -Wp1, "$1" | sed 's/,/ /g'`;;
+        -Wp2,*)  preproc2_opts="$preproc2_opts "`get_arg_val -Wp2, "$1" | sed 's/,/ /g'`;;
+        -Wc,*)   cxx_opts="$compile_opts "`get_arg_val -Wc, "$1" | sed 's/,/ /g'`;;
+        -Wl,*)   ld_opts="$ld_opts "`get_arg_val -Wl, "$1" | sed 's/,/ /g'`;;
+        -Wt,*)   trans_opts="$trans_opts "`get_arg_val -Wt, "$1" | sed 's/,/ /g'`;;
+        --iface=3.0|--iface=3)
+                 iface_version=2;;
+        --iface=*)
+                 iface_version=1;;
+        --help) eval help_iface$iface_version; exit;;
+        --help-ifaces) help_ifaces; exit;;
+        --version) $occ --version; exit;;
+        --verbose) verbose=yes;;
+        --silent|--quiet) verbose=no;;
+        --dry-run) dry_run=yes;;
+        --) shift; break;;
+        -*) fail "unknown option \`$1'";;
+        *)  add_input_file $1
+    esac
+    shift
+done
+
+while test "x$1" != x; do
+    add_input_file $1
+    shift
+done
+
+if test "x$plugin" != x; then
+    valdtr="$valdtrplug $plugin"
+    trans="$transplug $plugin"
+fi
+
+if test "x$output_file" = x; then
+    if test $stop_after = link; then
+        if test $single_input_file = yes; then
+            core_filename=`get_core_filename $input_files`
+            case $link_mode in
+                exec)    output_file=$core_filename$exeext;;
+                plugin)  output_file='';;
+                *)       fail "unknown link mode \`$link_mode'";;
+            esac
+        else
+            fail "output filename missing"
+        fi
+    fi
+else
+    if test $link_mode = plugin; then
+        fail "output file name cannot be set when building a plugin"
+    fi
+fi
+
+for filename in $input_files; do
+    dispositions=`retrieve_file_dispositions $filename`
+    core_filename=`get_core_filename $filename`
+    phase=preproc1
+    this_output=`find_output_filename preproc1 $core_filename.ii`
+    case $dispositions in
+        *preproc1-yes*)
+            execute $cpp -x c++ -D__opencxx $preproc_opts $preproc1_opts $occ_includes $includes $filename -o $this_output
+            ;;
+        *preproc1-no*)
+            execute cp $filename $this_output
+            ;;
+    esac
+    test $stop_after = preproc1 && continue
+
+    phase=parse-and-translate
+    this_output=`find_output_filename translate $core_filename.occ`
+    if test $stop_after = validate; then
+        case $dispositions in
+            *validate-yes*)
+                execute $valdtr $trans_opts '<' $core_filename.ii
+        esac
+    else
+        case $dispositions in
+            *translate-yes*)
+                case $dispositions in
+                    *validate-no*)
+                        echo $cmdname: WARNING: validation is implied when translation is on >&2
+                        ;;
+                esac
+                translator="$trans"
+                test $link_mode = plugin  &&  translator="$transtoplug"
+                execute $translator $trans_opts \
+                    `test x$link_mode = xplugin && echo --private--no-static-initialization` \
+                    '<' $core_filename.ii --private--output $this_output.tmp \
+                    '2>' $core_filename.feedback
+		touch $core_filename.feedback
+                grep -v '#attn-external-driver' $core_filename.feedback 1>&2
+                execute mv $this_output.tmp $this_output
+                ;;
+            *translate-no*)
+                case $dispositions in
+                    *validate-yes*)
+                        execute $valdtr $valdtr_opts '<' $core_filename.ii
+                        ;;
+                esac
+                execute cp $code_filename.ii
+                ;;
+        esac
+    fi
+    test $stop_after = validate && continue
+    test $stop_after = translate && continue
+    
+    phase=preproc2
+    this_output=`find_output_filename translate $core_filename.2.ii`
+    case $dispositions in
+        *preproc2-yes*)
+            execute $cpp $preproc_opts $preproc2_opts $occ_includes $includes $core_filename.occ -o $this_output
+            ;;
+        *preproc2-no*)
+            execute cp $core_filename.occ $core_filename.2.ii
+            ;;
+    esac
+    test $stop_after = preproc2 && continue
+    
+    phase=compile
+    this_output=`find_output_filename compile $core_filename.lo`
+    case $dispositions in
+        *compile-yes*)
+            execute $libtool --tag=CXX --mode=compile \
+		`test x$verbose = xno && echo ' --silent'` \
+		$cxx $cxx_opts -c $core_filename.2.ii -o $this_output
+            case $link_mode in
+                exec)
+                    ;;
+                plugin)
+                    cat $core_filename.feedback | \
+                    while read discriminator command arg1 arg2 tail; do
+                        if test "x$discriminator" = "x#attn-external-driver"; then
+                            case "$command" in
+                                compile-plugin-init)
+                                    execute $libtool --tag=CXX --mode=compile \
+                                        `test x$verbose = xno && echo ' --silent'` \
+                                        $cxx $cxx_opts \
+                                        -c $arg1 \
+                                        -o $arg2.lo
+                                    execute $libtool --tag=CXX --mode=link \
+                                        `test x$verbose = xno && echo ' --silent'` \
+                                        $ld -avoid-version -module -rpath `pwd` \
+                                        $arg2.lo -o $arg2.la
+                                ;;
+                            esac
+                        fi
+                    done
+                    ;;
+                *)
+                    fail "unknown link mode \`$link_mode'"
+                    ;;
+            esac    
+            ;;
+    esac
+    link_line="$link_line $this_output"
+done
+
+phase=linking
+if test $stop_after = link; then
+    if test "x$input_files" != x; then
+        case $link_mode in
+            exec)
+                execute $libtool --tag=CXX --mode=link \
+                    `test x$verbose = xno && echo ' --silent'` \
+                    $ld $ld_opts $link_line $occ_libraries $libraries \
+                    -o $output_file
+                ;;
+            plugin)
+                plugin_name=`
+                    cat $core_filename.feedback | \
+                    while read discriminator command arg1 tail; do
+                        if test "x$discriminator" = "x#attn-external-driver"; then
+                            case "$command" in
+                                plugin-name)
+                                    echo $arg1
+                                ;;
+                            esac
+                        fi
+                    done
+                `
+                if test "x$plugin_name" = x; then
+                    fail "subprocess failed to pass plugin name (bug?)"
+                fi
+                execute $libtool --tag=CXX --mode=link \
+                    `test x$verbose = xno && echo ' --silent'` \
+                    $ld -avoid-version -module -rpath `pwd` \
+                    $link_line -o $plugin_name.la
+                ;;
+            *)
+                fail "unknown link mode \`$link_mode'" >&2
+                ;;
+        esac
+    fi
+fi
+

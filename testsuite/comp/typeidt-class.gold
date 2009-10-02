@@ -1,0 +1,2 @@
+typeid ( int  ).name(  )
+typeid ( SomeTemplate < SomeTemplate < int  >  >  ).name(  )
